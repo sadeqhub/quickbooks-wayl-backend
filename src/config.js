@@ -4,14 +4,17 @@ require('dotenv').config();
 // e.g. https://myapp.example.com or http://localhost:8000
 const appBaseUrl = process.env.APP_BASE_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:8000');
 
+// Intuit/QuickBooks: support both INTUIT_* and QUICKBOOKS_* env vars (e.g. for Porter/Netlify)
+const intuit = {
+  clientId: process.env.INTUIT_CLIENT_ID || process.env.QUICKBOOKS_CLIENT_ID,
+  clientSecret: process.env.INTUIT_CLIENT_SECRET || process.env.QUICKBOOKS_CLIENT_SECRET,
+  redirectUri: process.env.INTUIT_REDIRECT_URI || process.env.QUICKBOOKS_REDIRECT_URI || `${appBaseUrl}/callback`,
+  environment: process.env.INTUIT_ENVIRONMENT || process.env.QUICKBOOKS_ENVIRONMENT || 'sandbox',
+};
+
 module.exports = {
   appBaseUrl,
-  intuit: {
-    clientId: process.env.INTUIT_CLIENT_ID,
-    clientSecret: process.env.INTUIT_CLIENT_SECRET,
-    redirectUri: process.env.INTUIT_REDIRECT_URI || `${appBaseUrl}/callback`,
-    environment: process.env.INTUIT_ENVIRONMENT || 'sandbox',
-  },
+  intuit,
   wayl: {
     apiBase: process.env.WAYL_API_BASE || 'https://api.thewayl.com',
     apiKey: process.env.WAYL_API_KEY,

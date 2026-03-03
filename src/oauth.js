@@ -2,6 +2,9 @@ const OAuthClient = require('intuit-oauth');
 const config = require('./config');
 const { getToken, setToken } = require('./store');
 
+const INTUIT_AUTHORIZE_ENDPOINT = 'https://appcenter.intuit.com/connect/oauth2';
+const OAUTH_SCOPES = [OAuthClient.scopes.Accounting, OAuthClient.scopes.OpenId];
+
 let oauthClient = null;
 
 function getOAuthClient() {
@@ -18,14 +21,33 @@ function getOAuthClient() {
 }
 
 /**
- * Get authorization URL to redirect the user to Intuit sign-in.
+ * Build the QuickBooks OAuth authorization URL with all required query parameters.
+ * Ensures client_id, response_type, scope, redirect_uri, and state are always present.
  */
 function getAuthUrl(state = 'qb_wayl_state') {
-  const client = getOAuthClient();
-  return client.authorizeUri({
-    scope: [OAuthClient.scopes.Accounting, OAuthClient.scopes.OpenId],
-    state,
+  const { clientId, redirectUri } = config.intuit;
+
+  if (!clientId || String(clientId).trim() === '') {
+    throw new Error(
+      'QuickBooks client_id is missing. Set INTUIT_CLIENT_ID or QUICKBOOKS_CLIENT_ID in your environment (e.g. .env or Porter/Netlify).'
+    );
+  }
+  if (!redirectUri || String(redirectUri).trim() === '') {
+    throw new Error(
+      'QuickBooks redirect_uri is missing. Set INTUIT_REDIRECT_URI or QUICKBOOKS_REDIRECT_URI (must match the redirect URL in the QuickBooks developer portal).'
+    );
+  }
+
+  const scope = OAUTH_SCOPES.join(' ');
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'code',
+    scope,
+    redirect_uri: redirectUri,
+    state: state || 'qb_wayl_state',
   });
+
+  return `${INTUIT_AUTHORIZE_ENDPOINT}?${params.toString()}`;
 }
 
 /**

@@ -3,10 +3,18 @@ const { getAuthUrl, exchangeCodeAndStore } = require('../oauth');
 /**
  * GET /auth
  * Redirect user to Intuit to authorize the app.
+ * Requires INTUIT_CLIENT_ID (or QUICKBOOKS_CLIENT_ID) and INTUIT_REDIRECT_URI in the environment.
  */
 function auth(req, res) {
-  const authUrl = getAuthUrl();
-  res.redirect(authUrl);
+  try {
+    const authUrl = getAuthUrl();
+    res.redirect(authUrl);
+  } catch (err) {
+    console.error('OAuth auth URL error:', err.message);
+    res.status(500).send(
+      `Authorization misconfiguration: ${err.message} Check your server environment variables (e.g. INTUIT_CLIENT_ID, INTUIT_REDIRECT_URI or QUICKBOOKS_*).`
+    );
+  }
 }
 
 /**
