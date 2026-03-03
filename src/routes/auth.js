@@ -1,4 +1,5 @@
 const { getAuthUrl, exchangeCodeAndStore } = require('../oauth');
+const { appBaseUrl } = require('../config');
 
 /**
  * GET /auth
@@ -21,12 +22,15 @@ function auth(req, res) {
  * GET /callback
  * Intuit redirects here with ?code=...&realmId=...&state=...
  * Exchange code for tokens and store by realmId.
+ * After successful auth, redirect the browser back to the frontend app
+ * (APP_BASE_URL in config) so the user lands on /app with realmId.
  */
 async function callback(req, res) {
   try {
     const redirectUrl = req.originalUrl; // e.g. /callback?code=...&realmId=...
     const { realmId } = await exchangeCodeAndStore(redirectUrl);
-    res.redirect(`/app?realmId=${encodeURIComponent(realmId)}`);
+    const target = `${appBaseUrl}/app?realmId=${encodeURIComponent(realmId)}`;
+    res.redirect(target);
   } catch (err) {
     console.error('OAuth callback error:', err);
     res.status(500).send(`Authorization failed: ${err.message || err.originalMessage || 'Unknown error'}`);
