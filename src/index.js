@@ -15,6 +15,22 @@ const { verifyAuth } = require('./wayl');
 const app = express();
 app.use(express.json());
 
+// Allow browser calls from the hosted frontend (Netlify) and local dev.
+// Adjust FRONTEND_ORIGIN in env if you deploy to a different domain.
+const allowedOrigin =
+  process.env.FRONTEND_ORIGIN ||
+  'https://quickbooks-wayl.netlify.app';
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', allowedOrigin);
+  res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // OAuth
 app.get('/auth', auth);
 app.get('/callback', callback);
