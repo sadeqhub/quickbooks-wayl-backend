@@ -23,6 +23,10 @@ function resolveTotalIQD(inv, body) {
   return { totalIQD, invoiceCurrency, invoiceTotal };
 }
 
+function buildWaylReferenceId(realmId, invoiceId) {
+  return `qb-${realmId}-invoice-${invoiceId}`;
+}
+
 /**
  * GET /api/invoices?realmId=...
  * List invoices for the connected company.
@@ -102,7 +106,7 @@ async function createPaymentLinkForInvoiceAndUpdateMemo(realmId, invoiceId, body
     throw new Error('Invoice not found');
   }
   const docNumber = inv.DocNumber || invoiceId;
-  const referenceId = `qb-invoice-${invoiceId}`;
+  const referenceId = buildWaylReferenceId(realmId, invoiceId);
   const resolved = resolveTotalIQD(inv, body);
   if (!resolved) {
     const invoiceCurrency = inv.CurrencyRef?.value || 'USD';
@@ -206,6 +210,7 @@ async function createInvoicePaymentLink(req, res) {
       });
     }
     const { totalIQD, invoiceCurrency } = resolved;
+    const referenceId = buildWaylReferenceId(rId, id);
     const createOptions = {
       referenceId,
       total: totalIQD,

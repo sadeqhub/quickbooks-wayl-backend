@@ -10,6 +10,7 @@ const {
 const { getWaylSettings, setWaylSettings, setWaylNoteSettings } = require('./routes/settings');
 const { getIntuitUrls } = require('./routes/intuit-urls');
 const { handleIntuitWebhook } = require('./routes/webhook-intuit');
+const { handleWaylWebhook } = require('./routes/webhook-wayl');
 const { getWaylApiKey } = require('./store');
 const { verifyAuth } = require('./wayl');
 
@@ -18,6 +19,9 @@ const app = express();
 // QuickBooks webhook: new/updated invoices etc. (use raw body for signature verification).
 // This MUST be registered before express.json(), otherwise the body will already be parsed.
 app.post('/api/webhook/intuit', express.raw({ type: 'application/json' }), handleIntuitWebhook);
+
+// Wayl webhook: receives payment completion callbacks (use raw body for signature verification).
+app.post('/api/webhook/wayl', express.raw({ type: 'application/json' }), handleWaylWebhook);
 
 // JSON body parsing for all non-webhook routes.
 app.use(express.json());
@@ -57,14 +61,6 @@ app.get('/api/settings/wayl', getWaylSettings);
 app.post('/api/settings/wayl', setWaylSettings);
 app.post('/api/settings/wayl/notes', setWaylNoteSettings);
 app.get('/api/intuit/urls', getIntuitUrls);
-
-// Wayl webhook: receives payment completion callbacks (default webhookUrl in link creation).
-app.post('/api/webhook/wayl', (req, res) => {
-  const signature = req.headers['x-wayl-signature-256'];
-  // Optionally verify signature with WAYL_WEBHOOK_SECRET; for now acknowledge receipt.
-  console.log('Wayl webhook received', signature ? '(signature present)' : '(no signature)');
-  res.status(200).json({ received: true });
-});
 
 app.get('/api/wayl/verify', async (req, res) => {
   const realmId = req.query.realmId;

@@ -84,11 +84,23 @@ async function sendInvoicePdf(realmId, invoiceId, sendTo) {
   return promisifyQb(qbo, 'sendInvoicePdf', invoiceId, sendTo || null);
 }
 
+/**
+ * Create a payment in QuickBooks and link it to an invoice.
+ * @param {string} realmId - Company (realm) ID
+ * @param {object} paymentPayload - Payment object to send to QuickBooks
+ */
+async function createPayment(realmId, paymentPayload) {
+  const qbo = await getQuickBooksClient(realmId);
+  if (!qbo) return null;
+  return promisifyQb(qbo, 'createPayment', paymentPayload);
+}
+
 module.exports = {
   getQuickBooksClient,
   getInvoice,
   findInvoices,
   updateInvoice,
   sendInvoicePdf,
+  createPayment,
   promisifyQb,
 };
