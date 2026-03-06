@@ -198,7 +198,6 @@ async function createInvoicePaymentLink(req, res) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
     const docNumber = inv.DocNumber || id;
-    const referenceId = `qb-invoice-${id}`;
     const resolved = resolveTotalIQD(inv, req.body);
     if (!resolved) {
       const invoiceCurrency = inv.CurrencyRef?.value || 'USD';
