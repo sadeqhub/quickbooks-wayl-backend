@@ -9,10 +9,17 @@ const {
 } = require('./routes/invoices');
 const { getWaylSettings, setWaylSettings, setWaylNoteSettings } = require('./routes/settings');
 const { getIntuitUrls } = require('./routes/intuit-urls');
+const { handleIntuitWebhook } = require('./routes/webhook-intuit');
 const { getWaylApiKey } = require('./store');
 const { verifyAuth } = require('./wayl');
 
 const app = express();
+
+// QuickBooks webhook: new/updated invoices etc. (use raw body for signature verification).
+// This MUST be registered before express.json(), otherwise the body will already be parsed.
+app.post('/api/webhook/intuit', express.raw({ type: 'application/json' }), handleIntuitWebhook);
+
+// JSON body parsing for all non-webhook routes.
 app.use(express.json());
 
 // Allow browser calls from the hosted frontend (Netlify) and local dev.

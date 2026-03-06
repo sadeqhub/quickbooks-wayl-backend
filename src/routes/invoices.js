@@ -76,6 +76,93 @@ async function getOneInvoice(req, res) {
 }
 
 /**
+ * Shared: create a Wayl payment link for an invoice and update the invoice's CustomerMemo with the link.
+ * Used by POST /api/invoices/:id/send-with-payment-link and by the Intuit webhook (new invoice created).
+ * @param {string} realmId
+ * @param {string} invoiceId
+ * @param {object} [body] - Optional { totalIQD } for non-IQD or small amounts
+ * @returns {Promise<{ paymentLink: string, docNumber: string, totalIQD: number, invoiceCurrency: string }>}
+ * @throws if not connected, no Wayl key, invoice not found, or total < 1000 IQD
+ */
+async function createPaymentLinkForInvoiceAndUpdateMemo(realmId, invoiceId, body = {}) {
+  if (!getToken(realmId)) {
+    throw new Error('Not connected. Visit /auth first.');
+  }
+  const waylApiKey = getWaylApiKey(realmId);
+  if (!waylApiKey) {
+    throw new Error('Wayl API key not set for this company.');
+  }
+
+  const invoice = await getInvoice(realmId, invoiceId);
+  if (!invoice) {
+    throw new Error('Could not connect to QuickBooks.');
+  }
+  const inv = invoice?.Invoice || invoice;
+  if (!inv || !inv.TotalAmt) {
+    throw new Error('Invoice not found');
+  }
+  const docNumber = inv.DocNumber || invoiceId;
+  const referenceId = `qb-invoice-${invoiceId}`;
+  const resolved = resolveTotalIQD(inv, body);
+  if (!resolved) {
+    const invoiceCurrency = inv.CurrencyRef?.value || 'USD';
+    const invoiceTotal = Number(inv.TotalAmt) || 0;
+    throw new Error(`Wayl requires total >= 1000 IQD. Invoice is ${invoiceTotal} ${invoiceCurrency}. Set totalIQD or USD_TO_IQD.`);
+  }
+  const { totalIQD, invoiceCurrency } = resolved;
+
+  const createOptions = {
+    referenceId,
+    total: totalIQD,
+    currency: 'IQD',
+    customParameter: docNumber,
+    lineItem: [{ label: 'Invoice ' + docNumber, amount: totalIQD, type: 'increase', image: config.wayl.lineItemImage }],
+    apiKey: waylApiKey,
+  };
+
+  let waylResponse;
+  let paymentUrl;
+  let effectiveReferenceId = referenceId;
+  try {
+    waylResponse = await createPaymentLink(createOptions);
+    paymentUrl = waylResponse.url || waylResponse.rawResponse?.data?.url;
+  } catch (err) {
+    if (err && err.status === 409) {
+      try {
+        await invalidateLink(referenceId, waylApiKey);
+      } catch (e) {
+        console.warn('Failed to invalidate existing Wayl link for', referenceId, e.message || e);
+      }
+      effectiveReferenceId = `${referenceId}-${Date.now()}`;
+      const retryOptions = { ...createOptions, referenceId: effectiveReferenceId };
+      waylResponse = await createPaymentLink(retryOptions);
+      paymentUrl = waylResponse.url || waylResponse.rawResponse?.data?.url;
+    } else {
+      throw err;
+    }
+  }
+
+  const lang = getInvoiceNoteLang(realmId);
+  let noteText;
+  if (lang === 'ar') {
+    noteText = `\n\nرابط الدفع عبر Wayl:\n${paymentUrl}\n`;
+  } else if (lang === 'both') {
+    noteText = `\n\nPay online via Wayl using this link / رابط الدفع عبر Wayl:\n${paymentUrl}\n`;
+  } else {
+    noteText = `\n\nPay online via Wayl using this link:\n${paymentUrl}\n`;
+  }
+  const updated = {
+    ...inv,
+    Id: inv.Id,
+    SyncToken: inv.SyncToken,
+    CustomerMemo: { value: noteText },
+  };
+  await updateInvoice(realmId, updated);
+
+  return { paymentLink: paymentUrl, docNumber, totalIQD, invoiceCurrency, referenceId: effectiveReferenceId };
+}
+
+/**
  * POST /api/invoices/:id/payment-link
  * Body: { realmId }
  * Creates a Wayl payment link for the invoice total and returns the link.
@@ -119,7 +206,6 @@ async function createInvoicePaymentLink(req, res) {
       });
     }
     const { totalIQD, invoiceCurrency } = resolved;
-    // Wayl requires lineItem array; send single line with total IQD.
     const createOptions = {
       referenceId,
       total: totalIQD,
@@ -136,7 +222,6 @@ async function createInvoicePaymentLink(req, res) {
       waylResponse = await createPaymentLink(createOptions);
       paymentUrl = waylResponse.url || waylResponse.rawResponse?.data?.url;
     } catch (err) {
-      // If referenceId already used, invalidate old link and create a fresh one.
       if (err && err.status === 409) {
         try {
           await invalidateLink(referenceId, waylApiKey);
@@ -170,8 +255,7 @@ async function createInvoicePaymentLink(req, res) {
 /**
  * POST /api/invoices/:id/send-with-payment-link
  * Body: { realmId, totalIQD?, sendTo? }
- * Creates a Wayl payment link, then sends the invoice PDF by email via QuickBooks (to BillEmail or sendTo).
- * Returns the payment link; the customer receives the invoice email from QuickBooks.
+ * Creates a Wayl payment link, updates the invoice memo with the link, then sends the invoice PDF by email via QuickBooks.
  */
 async function sendInvoiceWithPaymentLink(req, res) {
   const { id } = req.params;
@@ -183,94 +267,15 @@ async function sendInvoiceWithPaymentLink(req, res) {
   if (!getToken(rId)) {
     return res.status(401).json({ error: 'Not connected. Visit /auth first.' });
   }
-  const waylApiKey = getWaylApiKey(rId);
-  if (!waylApiKey) {
+  if (!getWaylApiKey(rId)) {
     return res.status(400).json({
       error: 'Wayl API key not set. Add your key via POST /api/settings/wayl first.',
     });
   }
 
   try {
-    const invoice = await getInvoice(rId, id);
-    if (!invoice) {
-      return res.status(401).json({ error: 'Could not connect to QuickBooks.' });
-    }
-    const inv = invoice?.Invoice || invoice;
-    if (!inv || !inv.TotalAmt) {
-      return res.status(404).json({ error: 'Invoice not found' });
-    }
-    const docNumber = inv.DocNumber || id;
-    const referenceId = `qb-invoice-${id}`;
-    const resolved = resolveTotalIQD(inv, req.body);
-    if (!resolved) {
-      const invoiceCurrency = inv.CurrencyRef?.value || 'USD';
-      const invoiceTotal = Number(inv.TotalAmt) || 0;
-      return res.status(400).json({
-        error: 'Wayl requires total >= 1000 IQD. Invoice is ' + invoiceTotal + ' ' + invoiceCurrency + '. Set totalIQD in the request body, or add USD_TO_IQD in .env to convert.',
-        invoiceTotal,
-        invoiceCurrency,
-      });
-    }
-    const { totalIQD, invoiceCurrency } = resolved;
-    const createOptions = {
-      referenceId,
-      total: totalIQD,
-      currency: 'IQD',
-      customParameter: docNumber,
-      lineItem: [{ label: 'Invoice ' + docNumber, amount: totalIQD, type: 'increase', image: config.wayl.lineItemImage }],
-      apiKey: waylApiKey,
-    };
-
-    let waylResponse;
-    let paymentUrl;
-    let effectiveReferenceId = referenceId;
-    try {
-      waylResponse = await createPaymentLink(createOptions);
-      paymentUrl = waylResponse.url || waylResponse.rawResponse?.data?.url;
-    } catch (err) {
-      if (err && err.status === 409) {
-        try {
-          await invalidateLink(referenceId, waylApiKey);
-        } catch (e) {
-          console.warn('Failed to invalidate existing Wayl link for', referenceId, e.message || e);
-        }
-        effectiveReferenceId = `${referenceId}-${Date.now()}`;
-        const retryOptions = { ...createOptions, referenceId: effectiveReferenceId };
-        waylResponse = await createPaymentLink(retryOptions);
-        paymentUrl = waylResponse.url || waylResponse.rawResponse?.data?.url;
-      } else {
-        throw err;
-      }
-    }
-
-    // Attach payment link into the invoice memo so it appears in the QB email.
-    try {
-      const original = inv;
-      const lang = getInvoiceNoteLang(rId);
-      let noteText;
-      if (lang === 'ar') {
-        // Arabic label, URL alone on its own line to avoid breaking the link.
-        noteText = `\n\nرابط الدفع:\n${paymentUrl}\n`;
-      } else if (lang === 'both') {
-        // Bilingual label, single URL line (ASCII only) to keep the link intact.
-        noteText = `\n\nPayment link / رابط الدفع:\n${paymentUrl}\n`;
-      } else {
-        // English only.
-        noteText = `\n\nPayment link:\n${paymentUrl}\n`;
-      }
-      const updated = {
-        ...original,
-        Id: original.Id,
-        SyncToken: original.SyncToken,
-        // Use a clean, single-purpose memo for the payment link.
-        CustomerMemo: {
-          value: noteText,
-        },
-      };
-      await updateInvoice(rId, updated);
-    } catch (e) {
-      console.warn('Failed to update invoice memo with payment link:', e.message || e);
-    }
+    const { paymentLink, docNumber, totalIQD, invoiceCurrency, referenceId } =
+      await createPaymentLinkForInvoiceAndUpdateMemo(rId, id, req.body || {});
 
     const sent = await sendInvoicePdf(rId, id, sendTo || undefined);
     if (!sent) {
@@ -282,8 +287,8 @@ async function sendInvoiceWithPaymentLink(req, res) {
       docNumber,
       totalIQD,
       invoiceCurrency,
-      paymentLink: paymentUrl,
-      referenceId: effectiveReferenceId,
+      paymentLink,
+      referenceId,
       sent: true,
       message: 'Invoice sent by email. Share the payment link with your customer.',
     });
@@ -297,5 +302,6 @@ module.exports = {
   listInvoices,
   getOneInvoice,
   createInvoicePaymentLink,
+  createPaymentLinkForInvoiceAndUpdateMemo,
   sendInvoiceWithPaymentLink,
 };

@@ -69,6 +69,22 @@ In your app’s **Keys & OAuth** (or App URLs) section, set:
 
 Set `APP_BASE_URL` in `.env` to your public base URL (e.g. `https://myapp.com`). Then **GET /api/intuit/urls** returns the exact values to paste into the Intuit Developer portal.
 
+## QuickBooks webhooks (new invoices, etc.)
+
+To have Intuit notify your backend when merchants create or update invoices (or other entities):
+
+1. **Webhook URL** — In [developer.intuit.com](https://developer.intuit.com) → your app → **Webhooks**, set the endpoint to your **backend** base URL + `/api/webhook/intuit`:
+   - **Production:** `https://web-14387-3febee06-albhe8gy.onporter.run/api/webhook/intuit` (replace with your own backend URL if different).
+   - **Local:** `https://your-ngrok-url.ngrok.io/api/webhook/intuit` (Intuit must reach your machine; localhost is not enough).
+
+2. **Verifier token** — On the same Webhooks page, copy the **Verifier Token**. In your backend environment (e.g. Porter), set:
+   - `INTUIT_WEBHOOK_VERIFIER_TOKEN` (or `QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN`) to that value.  
+   The backend uses it to verify the `intuit-signature` header on each POST so only Intuit can trigger the handler.
+
+3. **Subscribe to events** — In the portal, enable the events you care about (e.g. **Invoice** created/updated). Save.
+
+The backend logs incoming webhook payloads and Invoice events; you can extend `src/routes/webhook-intuit.js` to enqueue jobs or call your own logic when an invoice is created or updated.
+
 ## Frontend (QuickBooks users)
 
 The app includes a small frontend (Wayl-styled) that QuickBooks users see when they launch the app:

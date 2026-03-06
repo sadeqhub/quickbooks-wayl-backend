@@ -10,6 +10,8 @@ const intuit = {
   clientSecret: process.env.INTUIT_CLIENT_SECRET || process.env.QUICKBOOKS_CLIENT_SECRET,
   redirectUri: process.env.INTUIT_REDIRECT_URI || process.env.QUICKBOOKS_REDIRECT_URI || `${appBaseUrl}/callback`,
   environment: process.env.INTUIT_ENVIRONMENT || process.env.QUICKBOOKS_ENVIRONMENT || 'sandbox',
+  // Webhook: verifier token from developer.intuit.com → your app → Webhooks (used to verify payload signature).
+  webhookVerifierToken: process.env.INTUIT_WEBHOOK_VERIFIER_TOKEN || process.env.QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN || '',
 };
 
 module.exports = {
