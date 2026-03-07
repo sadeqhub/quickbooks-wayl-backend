@@ -1,4 +1,5 @@
-const { Readable } = require('stream');
+const fs = require('fs');
+const path = require('path');
 const QuickBooks = require('node-quickbooks');
 const config = require('./config');
 const { getValidToken } = require('./oauth');
@@ -109,8 +110,15 @@ async function sendInvoicePdf(realmId, invoiceId, sendTo) {
 async function uploadAttachable(realmId, filename, contentType, buffer, entityType, entityId) {
   const qbo = await getQuickBooksClient(realmId);
   if (!qbo) return null;
-  const stream = Readable.from(buffer);
-  return promisifyQb(qbo, 'upload', filename, contentType, stream, entityType, entityId);
+  const tmpPath = path.join(require('os').tmpdir(), `qr-${Date.now()}-${path.basename(filename)}`);
+  try {
+    fs.writeFileSync(tmpPath, buffer);
+    const stream = fs.createReadStream(tmpPath);
+    const result = await promisifyQb(qbo, 'upload', filename, contentType, stream, entityType, entityId);
+    return result;
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+  }
 }
 
 /**

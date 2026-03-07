@@ -2,7 +2,7 @@ const QRCode = require('qrcode');
 const config = require('../config');
 const { findInvoices, getInvoice, sendInvoicePdf, updateInvoice, uploadAttachable } = require('../quickbooks');
 const { createPaymentLink, getLink, invalidateLink } = require('../wayl');
-const { getToken, getWaylApiKey, getInvoiceNoteLang } = require('../store');
+const { getToken, getWaylApiKey, getInvoiceNoteLang, generateRedirectToken, setRedirectUrl } = require('../store');
 
 /**
  * Shared: resolve totalIQD for an invoice (body totalIQD, or IQD total, or USD_TO_IQD conversion).
@@ -147,14 +147,18 @@ async function createPaymentLinkForInvoiceAndUpdateMemo(realmId, invoiceId, body
     }
   }
 
+  const shortToken = generateRedirectToken();
+  setRedirectUrl(shortToken, paymentUrl);
+  const shortUrl = `${config.appBaseUrl}/r/${shortToken}`;
+
   const lang = getInvoiceNoteLang(realmId);
   let noteText;
   if (lang === 'ar') {
-    noteText = `\n\nرابط الدفع عبر Wayl:\n${paymentUrl}\n`;
+    noteText = `\n\nرابط الدفع عبر Wayl:\n${shortUrl}`;
   } else if (lang === 'both') {
-    noteText = `\n\nPay online via Wayl using this link / رابط الدفع عبر Wayl:\n${paymentUrl}\n`;
+    noteText = `\n\nPay online via Wayl / رابط الدفع عبر Wayl:\n${shortUrl}`;
   } else {
-    noteText = `\n\nPay online via Wayl using this link:\n${paymentUrl}\n`;
+    noteText = `\n\nPay online via Wayl:\n${shortUrl}`;
   }
   const updated = {
     ...inv,
@@ -168,7 +172,7 @@ async function createPaymentLinkForInvoiceAndUpdateMemo(realmId, invoiceId, body
     const qrBuffer = await QRCode.toBuffer(paymentUrl, { type: 'png', width: 256, margin: 2 });
     await uploadAttachable(realmId, 'payment-qr.png', 'image/png', qrBuffer, 'Invoice', invoiceId);
   } catch (e) {
-    console.warn('Failed to attach QR code to invoice:', e.message || e);
+    console.warn('Failed to attach QR code to invoice:', e?.message || e?.Fault?.Error?.[0]?.Message || String(e));
   }
 
   return { paymentLink: paymentUrl, docNumber, totalIQD, invoiceCurrency, referenceId: effectiveReferenceId };
