@@ -1,8 +1,7 @@
 const config = require('../config');
-const { findInvoices, getInvoice, getInvoicePdf, sendInvoicePdf, updateInvoice } = require('../quickbooks');
+const { findInvoices, getInvoice, sendInvoicePdf, updateInvoice } = require('../quickbooks');
 const { createPaymentLink, getLink, invalidateLink } = require('../wayl');
 const { getToken, getWaylApiKey, getInvoiceNoteLang } = require('../store');
-const { isEnabled: isEmailEnabled, sendInvoiceEmail } = require('../email');
 
 /**
  * Shared: resolve totalIQD for an invoice (body totalIQD, or IQD total, or USD_TO_IQD conversion).
@@ -282,25 +281,7 @@ async function sendInvoiceWithPaymentLink(req, res) {
     const { paymentLink, docNumber, totalIQD, invoiceCurrency, referenceId } =
       await createPaymentLinkForInvoiceAndUpdateMemo(rId, id, req.body || {});
 
-    let sent = false;
-    if (isEmailEnabled()) {
-      try {
-        const pdfBuffer = await getInvoicePdf(rId, id);
-        if (pdfBuffer) {
-          const invoice = await getInvoice(rId, id);
-          const inv = invoice?.Invoice || invoice;
-          const to = sendTo || inv?.BillEmail?.Address || inv?.BillEmail?.PlainAddress;
-          if (to) {
-            sent = await sendInvoiceEmail({ to, docNumber, paymentLink, pdfBuffer });
-          }
-        }
-      } catch (e) {
-        console.warn('Custom invoice email failed, falling back to QuickBooks send:', e.message || e);
-      }
-    }
-    if (!sent) {
-      sent = await sendInvoicePdf(rId, id, sendTo || undefined);
-    }
+    const sent = await sendInvoicePdf(rId, id, sendTo || undefined);
     if (!sent) {
       return res.status(401).json({ error: 'Could not send invoice. Re-authorize at /auth if needed.' });
     }
