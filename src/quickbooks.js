@@ -72,6 +72,18 @@ async function updateInvoice(realmId, invoicePayload) {
 }
 
 /**
+ * Fetch the invoice PDF as a buffer.
+ * @param {string} realmId - Company (realm) ID
+ * @param {string} invoiceId - Invoice ID
+ * @returns {Promise<Buffer|null>} - PDF buffer or null
+ */
+async function getInvoicePdf(realmId, invoiceId) {
+  const qbo = await getQuickBooksClient(realmId);
+  if (!qbo) return null;
+  return promisifyQb(qbo, 'getInvoicePdf', invoiceId);
+}
+
+/**
  * Send invoice PDF by email via QuickBooks.
  * @param {string} realmId - Company (realm) ID
  * @param {string} invoiceId - Invoice ID
@@ -98,6 +110,7 @@ async function createPayment(realmId, paymentPayload) {
 module.exports = {
   getQuickBooksClient,
   getInvoice,
+  getInvoicePdf,
   findInvoices,
   updateInvoice,
   sendInvoicePdf,

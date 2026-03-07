@@ -11,6 +11,7 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "intuit-oauth": "^4.2.2",
-    "node-quickbooks": "^2.0.48"
+    "node-quickbooks": "^2.0.48",
+    "nodemailer": "^8.0.1"
   }
 }

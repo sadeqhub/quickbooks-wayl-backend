@@ -14,9 +14,21 @@ const intuit = {
   webhookVerifierToken: process.env.INTUIT_WEBHOOK_VERIFIER_TOKEN || process.env.QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN || '',
 };
 
+// Email (optional): when SMTP_* is set, invoice emails use custom body with payment link
+const email = {
+  host: process.env.SMTP_HOST || '',
+  port: parseInt(process.env.SMTP_PORT || '587', 10),
+  secure: process.env.SMTP_SECURE === 'true',
+  user: process.env.SMTP_USER || '',
+  pass: process.env.SMTP_PASS || '',
+  from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@example.com',
+  enabled: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+};
+
 module.exports = {
   appBaseUrl,
   intuit,
+  email,
   wayl: {
     apiBase: process.env.WAYL_API_BASE || 'https://api.thewayl.com',
     apiKey: process.env.WAYL_API_KEY,
