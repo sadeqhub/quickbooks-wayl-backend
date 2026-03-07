@@ -12,6 +12,7 @@
     "express": "^4.18.2",
     "intuit-oauth": "^4.2.2",
     "node-quickbooks": "^2.0.48",
-    "nodemailer": "^8.0.1"
+    "nodemailer": "^8.0.1",
+    "qrcode": "^1.5.4"
   }
 }

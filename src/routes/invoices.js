@@ -1,5 +1,6 @@
+const QRCode = require('qrcode');
 const config = require('../config');
-const { findInvoices, getInvoice, sendInvoicePdf, updateInvoice } = require('../quickbooks');
+const { findInvoices, getInvoice, sendInvoicePdf, updateInvoice, uploadAttachable } = require('../quickbooks');
 const { createPaymentLink, getLink, invalidateLink } = require('../wayl');
 const { getToken, getWaylApiKey, getInvoiceNoteLang } = require('../store');
 
@@ -162,6 +163,13 @@ async function createPaymentLinkForInvoiceAndUpdateMemo(realmId, invoiceId, body
     CustomerMemo: { value: noteText },
   };
   await updateInvoice(realmId, updated);
+
+  try {
+    const qrBuffer = await QRCode.toBuffer(paymentUrl, { type: 'png', width: 256, margin: 2 });
+    await uploadAttachable(realmId, 'payment-qr.png', 'image/png', qrBuffer, 'Invoice', invoiceId);
+  } catch (e) {
+    console.warn('Failed to attach QR code to invoice:', e.message || e);
+  }
 
   return { paymentLink: paymentUrl, docNumber, totalIQD, invoiceCurrency, referenceId: effectiveReferenceId };
 }

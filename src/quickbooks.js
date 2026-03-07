@@ -1,3 +1,4 @@
+const { Readable } = require('stream');
 const QuickBooks = require('node-quickbooks');
 const config = require('./config');
 const { getValidToken } = require('./oauth');
@@ -97,6 +98,22 @@ async function sendInvoicePdf(realmId, invoiceId, sendTo) {
 }
 
 /**
+ * Upload a file as an Attachable linked to an entity.
+ * @param {string} realmId - Company (realm) ID
+ * @param {string} filename - File name
+ * @param {string} contentType - MIME type (e.g. 'image/png')
+ * @param {Buffer} buffer - File content
+ * @param {string} entityType - e.g. 'Invoice'
+ * @param {string} entityId - Entity ID
+ */
+async function uploadAttachable(realmId, filename, contentType, buffer, entityType, entityId) {
+  const qbo = await getQuickBooksClient(realmId);
+  if (!qbo) return null;
+  const stream = Readable.from(buffer);
+  return promisifyQb(qbo, 'upload', filename, contentType, stream, entityType, entityId);
+}
+
+/**
  * Create a payment in QuickBooks and link it to an invoice.
  * @param {string} realmId - Company (realm) ID
  * @param {object} paymentPayload - Payment object to send to QuickBooks
@@ -111,6 +128,7 @@ module.exports = {
   getQuickBooksClient,
   getInvoice,
   getInvoicePdf,
+  uploadAttachable,
   findInvoices,
   updateInvoice,
   sendInvoicePdf,
