@@ -42,4 +42,7 @@ module.exports = {
     usdToIqd: process.env.USD_TO_IQD ? parseFloat(process.env.USD_TO_IQD, 10) : 1320,
   },
   port: parseInt(process.env.PORT || '8000', 10),
+  dub: {
+    apiKey: process.env.DUB_API_KEY || '',
+  },
 };

@@ -3,6 +3,21 @@ const config = require('../config');
 const { findInvoices, getInvoice, sendInvoicePdf, updateInvoice, uploadAttachable } = require('../quickbooks');
 const { createPaymentLink, getLink, invalidateLink } = require('../wayl');
 const { getToken, getWaylApiKey, getInvoiceNoteLang, generateRedirectToken, setRedirectUrl } = require('../store');
+const { shortenUrl } = require('../dub');
+
+/**
+ * Shorten a URL using dub.co if configured, otherwise fall back to local /r/:token redirect.
+ * @param {string} url
+ * @returns {Promise<string>}
+ */
+async function buildShortUrl(url) {
+  const dubShort = await shortenUrl(url);
+  if (dubShort) return dubShort;
+
+  const token = generateRedirectToken();
+  setRedirectUrl(token, url);
+  return `${config.appBaseUrl}/r/${token}`;
+}
 
 /**
  * Shared: resolve totalIQD for an invoice (body totalIQD, or IQD total, or USD_TO_IQD conversion).
@@ -147,9 +162,7 @@ async function createPaymentLinkForInvoiceAndUpdateMemo(realmId, invoiceId, body
     }
   }
 
-  const shortToken = generateRedirectToken();
-  setRedirectUrl(shortToken, paymentUrl);
-  const shortUrl = `${config.appBaseUrl}/r/${shortToken}`;
+  const shortUrl = await buildShortUrl(paymentUrl);
 
   const lang = getInvoiceNoteLang(realmId);
   let noteText;
@@ -175,7 +188,7 @@ async function createPaymentLinkForInvoiceAndUpdateMemo(realmId, invoiceId, body
     console.warn('Failed to attach QR code to invoice:', e?.message || e?.Fault?.Error?.[0]?.Message || String(e));
   }
 
-  return { paymentLink: paymentUrl, docNumber, totalIQD, invoiceCurrency, referenceId: effectiveReferenceId };
+  return { paymentLink: shortUrl, docNumber, totalIQD, invoiceCurrency, referenceId: effectiveReferenceId };
 }
 
 /**
@@ -253,12 +266,14 @@ async function createInvoicePaymentLink(req, res) {
       }
     }
 
+    const shortUrl = await buildShortUrl(paymentUrl);
+
     res.json({
       invoiceId: id,
       docNumber,
       totalIQD,
       invoiceCurrency,
-      paymentLink: paymentUrl,
+      paymentLink: shortUrl,
       referenceId: effectiveReferenceId,
       waylResponse: waylResponse.rawResponse || waylResponse,
     });

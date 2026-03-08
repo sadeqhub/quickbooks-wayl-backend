@@ -11,7 +11,7 @@ const { getWaylSettings, setWaylSettings, setWaylNoteSettings } = require('./rou
 const { getIntuitUrls } = require('./routes/intuit-urls');
 const { handleIntuitWebhook } = require('./routes/webhook-intuit');
 const { handleWaylWebhook } = require('./routes/webhook-wayl');
-const { getWaylApiKey } = require('./store');
+const { getWaylApiKey, getRedirectUrl } = require('./store');
 const { verifyAuth } = require('./wayl');
 
 const app = express();
@@ -61,6 +61,12 @@ app.get('/api/settings/wayl', getWaylSettings);
 app.post('/api/settings/wayl', setWaylSettings);
 app.post('/api/settings/wayl/notes', setWaylNoteSettings);
 app.get('/api/intuit/urls', getIntuitUrls);
+
+app.get('/r/:token', (req, res) => {
+  const url = getRedirectUrl(req.params.token);
+  if (url) return res.redirect(302, url);
+  res.status(404).send('Link not found');
+});
 
 app.get('/api/wayl/verify', async (req, res) => {
   const realmId = req.query.realmId;

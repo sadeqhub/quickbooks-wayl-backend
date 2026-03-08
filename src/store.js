@@ -64,6 +64,49 @@ function saveNoteLangs(map) {
 
 const noteLangByRealm = loadNoteLangs();
 
+const redirectTokensPath = path.join(__dirname, '..', 'data', 'redirect-tokens.json');
+
+function loadRedirectTokens() {
+  const map = new Map();
+  try {
+    const dir = path.dirname(redirectTokensPath);
+    if (!fs.existsSync(dir)) return map;
+    const raw = fs.readFileSync(redirectTokensPath, 'utf8');
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object') {
+      for (const [token, url] of Object.entries(obj)) {
+        if (token && url) map.set(token, String(url));
+      }
+    }
+  } catch (_) {}
+  return map;
+}
+
+function saveRedirectTokens(map) {
+  const dir = path.dirname(redirectTokensPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const obj = Object.fromEntries(map);
+  fs.writeFileSync(redirectTokensPath, JSON.stringify(obj, null, 2), 'utf8');
+}
+
+const redirectTokens = loadRedirectTokens();
+
+function generateRedirectToken() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let token = '';
+  for (let i = 0; i < 8; i++) token += chars[Math.floor(Math.random() * chars.length)];
+  return token;
+}
+
+function setRedirectUrl(token, url) {
+  redirectTokens.set(token, url);
+  saveRedirectTokens(redirectTokens);
+}
+
+function getRedirectUrl(token) {
+  return redirectTokens.get(token) || null;
+}
+
 function getToken(realmId) {
   return tokensByRealm.get(realmId) || null;
 }
@@ -122,4 +165,7 @@ module.exports = {
   deleteWaylApiKey,
   getInvoiceNoteLang,
   setInvoiceNoteLang,
+  generateRedirectToken,
+  setRedirectUrl,
+  getRedirectUrl,
 };
